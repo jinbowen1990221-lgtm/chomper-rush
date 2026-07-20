@@ -10,6 +10,16 @@
 
 这是一个使用原生 HTML、CSS 和 JavaScript 制作的多人竞技吃豆游戏 Demo。项目围绕“资源争夺、成长变强、反杀、冲榜”设计，适合在手机横屏环境中体验。
 
+## 手机横屏截图
+
+### 游戏首页
+
+![《吃豆人大作战》手机横屏首页](docs/screenshots/home-mobile.png)
+
+### 无尽模式实战
+
+![《吃豆人大作战》手机横屏实战界面](docs/screenshots/gameplay-mobile.png)
+
 ## 项目特色
 
 - 移动端横屏适配，优先支持 iPhone Safari 横屏体验
