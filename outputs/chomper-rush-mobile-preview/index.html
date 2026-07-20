@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>吃豆人大作战</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="rotateGuard">
+      <div class="rotate-phone"></div>
+      <p>请旋转手机，进入横屏街机模式</p>
+    </div>
+
+    <main id="app">
+      <canvas id="gameCanvas" aria-label="吃豆人大作战 battle canvas"></canvas>
+
+      <section id="mainMenu" class="screen active">
+        <button id="settingsBtn" class="settings-fab" aria-label="设置">
+          <img src="assets/home/settings.png" alt="" draggable="false" />
+        </button>
+
+        <div class="home-shell">
+          <div class="title-area">
+            <img class="home-asset home-title-img" src="assets/home/title.png" alt="吃豆人大作战" draggable="false" />
+            <img class="home-asset home-subtitle-img" src="assets/home/subtitle.png" alt="Bean Battle" draggable="false" />
+          </div>
+
+          <div class="character-area" data-skin="royal-v1">
+            <img class="home-asset home-character-img" src="assets/home/character.png" alt="皇家黑豆王" draggable="false" />
+          </div>
+
+          <div class="mode-buttons">
+            <button id="practiceBtn" class="mode-image-button" aria-label="无尽模式">
+              <img src="assets/home/endless.png" alt="" draggable="false" />
+            </button>
+
+            <button id="rankedBtn" class="mode-image-button" aria-label="排位模式">
+              <img src="assets/home/ranked.png" alt="" draggable="false" />
+            </button>
+          </div>
+
+          <div class="profile-strip home-profile-strip" aria-label="玩家战绩">
+            <span>段位 <b id="rankStars">青铜海湾 ★★</b></span>
+            <span>金币 <b id="walletCoins">3,250</b></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="settingsScreen" class="screen">
+        <div class="settings-board">
+          <div class="settings-top">
+            <button id="settingsBackBtn" class="icon-button" aria-label="返回主屏幕">←</button>
+            <h2>设置</h2>
+          </div>
+
+          <div class="settings-group control-layout-group">
+            <h3>操作方向</h3>
+            <div class="segmented-control">
+              <button id="layoutLeftBtn" data-layout="left">摇杆左 / BOOST右</button>
+              <button id="layoutRightBtn" data-layout="right">BOOST左 / 摇杆右</button>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h3>声音</h3>
+            <label class="toggle-row">
+              <span>背景音乐</span>
+              <input id="musicToggle" type="checkbox" checked />
+            </label>
+            <label class="toggle-row">
+              <span>音效</span>
+              <input id="sfxToggle" type="checkbox" checked />
+            </label>
+          </div>
+
+          <div class="settings-actions">
+            <button id="settingsConfirmBtn" class="wood-button primary">确认</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="resultScreen" class="screen">
+        <div class="result-board">
+          <span id="resultTitle" class="stage-tag">排位结束</span>
+          <h2 id="resultLine">港口王者！你统治了迷宫。</h2>
+          <div class="result-stats">
+            <span>最终排名 <b id="resultRank">#1</b></span>
+            <span>得分 <b id="resultScore">0</b></span>
+            <span>击败 <b id="resultKills">0</b></span>
+            <span>最高 Combo <b id="resultCombo">x0</b></span>
+            <span>获得金币 <b id="resultCoins">0</b></span>
+            <span id="starDeltaWrap">星星变化 <b id="resultStars">+0</b></span>
+          </div>
+          <div class="result-actions">
+            <button id="againBtn" class="wood-button primary">再来一局</button>
+            <button id="homeBtn" class="wood-button">返回主屏幕</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="hud" class="hud hidden">
+        <div class="hud-row">
+          <span>SCORE <b id="hudScore">0</b></span>
+          <span>LIFE <b id="hudHp">1</b></span>
+          <span>COMBO <b id="hudCombo">x0</b></span>
+          <span id="powerHud">POWER <b>00:00</b></span>
+          <span>COINS <b id="hudCoins">0</b></span>
+          <span>RANK <b id="hudRank">#1</b></span>
+          <span id="growthHud">GROWTH <b id="hudGrowth">Lv.1 小不点 0%</b></span>
+          <span>ONLINE <b id="hudTime">100</b></span>
+          <span id="hudMode">无尽</span>
+        </div>
+      </div>
+
+      <aside id="leaderboard" class="leaderboard hidden">
+        <h3>排行榜</h3>
+        <ol id="leaderList"></ol>
+        <p id="bountyLine">悬赏目标：--</p>
+      </aside>
+
+      <div id="messageStack" class="message-stack"></div>
+
+      <div id="controls" class="controls hidden">
+        <div id="joystick" class="joystick" aria-label="移动摇杆">
+          <div id="stick" class="stick"></div>
+        </div>
+        <button id="boostBtn" class="boost-button" aria-label="BOOST">
+          <span>BOOST</span>
+          <i id="boostCooldown"></i>
+        </button>
+      </div>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
