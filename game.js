@@ -91,6 +91,7 @@ const toolTypes = [
   { type: "cloak", label: "进入伪装：敌人暂时失去目标！" }
 ];
 
+const app = document.getElementById("app");
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const hud = document.getElementById("hud");
@@ -200,11 +201,14 @@ let fieldBanner = { text: "", timer: 0, color: "#ffd66b" };
 let joystickState = { active: false, id: null, x: 0, y: 0, dx: 0, dy: 0 };
 let keyVector = { x: 0, y: 0 };
 let audioEngine;
+let resizeFrame = 0;
+let resizeTimer = 0;
 
 resize();
 renderShop();
 syncMeta();
 bindEvents();
+scheduleResize();
 generatePickups();
 requestAnimationFrame(loop);
 
@@ -370,7 +374,13 @@ function bindEvents() {
     if (["ArrowLeft", "ArrowRight", "a", "d"].includes(event.key.toLowerCase())) keyVector.x = 0;
     if (["ArrowUp", "ArrowDown", "w", "s"].includes(event.key.toLowerCase())) keyVector.y = 0;
   });
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", scheduleResize);
+  window.addEventListener("orientationchange", scheduleResize);
+  window.visualViewport?.addEventListener("resize", scheduleResize);
+  window.addEventListener("pageshow", scheduleResize);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) scheduleResize();
+  });
 }
 
 function showMenu() {
@@ -577,6 +587,7 @@ function startBattle(selectedMode) {
   controls.classList.remove("hidden");
   leaderboard.classList.remove("hidden");
   applyControlLayout();
+  scheduleResize();
 
   elapsed = 0;
   rankedTimeLeft = RANKED_SECONDS;
@@ -2827,14 +2838,29 @@ function buyOrEquip(key) {
   renderShop();
 }
 
+// iOS Safari may report the old portrait viewport for a frame after rotation.
+function scheduleResize() {
+  cancelAnimationFrame(resizeFrame);
+  clearTimeout(resizeTimer);
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = requestAnimationFrame(resize);
+  });
+  resizeTimer = window.setTimeout(resize, 260);
+}
+
 function resize() {
   const dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
-  canvas.style.width = `${w}px`;
-  canvas.style.height = `${h}px`;
+  const appRect = app.getBoundingClientRect();
+  const w = Math.max(1, Math.round(appRect.width || window.visualViewport?.width || window.innerWidth));
+  const h = Math.max(1, Math.round(appRect.height || window.visualViewport?.height || window.innerHeight));
+  const pixelWidth = Math.floor(w * dpr);
+  const pixelHeight = Math.floor(h * dpr);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   viewportWidth = VIEW_WIDTH / CAMERA_ZOOM;
   viewportHeight = VIEW_HEIGHT / CAMERA_ZOOM;
