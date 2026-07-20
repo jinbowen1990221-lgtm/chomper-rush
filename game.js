@@ -19,6 +19,11 @@ const POWER_WARNING_SECONDS = 3;
 const TOP_BOUNTY_BONUS = 2600;
 const TOP_PELLET_MULTIPLIER = 0.8;
 const POWER_SIZE_MULTIPLIER = 1.18;
+const HIGH_SCORE_HUNT_FLOOR = 1200;
+const MAX_HUNTERS_PER_TARGET = 4;
+const PLAYER_PRESSURE_HUNTERS = 2;
+const AI_HUNT_RANGE = 4200;
+const AI_WEAPON_DETOUR_RANGE = 1650;
 const GROWTH_CONFIG = {
   smallPelletGrowth: 1,
   coinGrowth: 2,
@@ -724,6 +729,7 @@ function createAICompetitor(template, index, score = 0, options = {}) {
     magnet: 0,
     cloak: 0,
     speedBuff: 0,
+    attackDrive: 0,
     frozen: 0,
     growth: startingGrowth,
     mass: growthState.mass,
@@ -736,6 +742,10 @@ function createAICompetitor(template, index, score = 0, options = {}) {
     path: [],
     think: 0,
     target: null,
+    intent: "farm",
+    focusTargetId: null,
+    huntLock: 0,
+    huntBias: Math.random(),
     lastDir: { x: 1, y: 0 }
   };
 }
@@ -905,7 +915,7 @@ function updatePlayer(dt) {
 }
 
 function tickBuffs(entity, dt) {
-  ["power", "magnet", "cloak", "speedBuff", "boostCooldown", "boostActive", "hitCooldown", "frozen"].forEach((key) => {
+  ["power", "magnet", "cloak", "speedBuff", "attackDrive", "boostCooldown", "boostActive", "hitCooldown", "frozen"].forEach((key) => {
     if (entity[key] > 0) entity[key] = Math.max(0, entity[key] - dt);
   });
 }
@@ -917,6 +927,7 @@ function updateAI(ai, dt) {
     return;
   }
   tickBuffs(ai, dt);
+  ai.huntLock = Math.max(0, (ai.huntLock || 0) - dt);
   ai.growPulse = Math.max(0, (ai.growPulse || 0) - dt);
   ai.levelPulse = Math.max(0, (ai.levelPulse || 0) - dt);
   if (ai.frozen > 0) return;
@@ -926,8 +937,10 @@ function updateAI(ai, dt) {
     ai.target = chooseAITarget(ai);
     ai.path = pathTo(ai.x, ai.y, ai.target.x, ai.target.y);
   }
-  const eliteBoost = ai.elite ? 1.28 : 1;
-  followPath(ai, dt, (145 + (ai.speedBuff > 0 ? 42 : 0) + (ai.power > 0 ? 22 : 0)) * (mode === "Ranked" ? 1.08 : 0.96) * eliteBoost * getMassSpeedFactor(ai));
+  const eliteBoost = ai.elite ? 1.22 : 1;
+  const intentBoost = ai.intent === "hunt" ? 1.56 : ai.intent === "arm" ? 1.28 : 1;
+  const hunterBoost = ai.intent === "hunt" && (ai.personality === "hunter" || ai.personality === "elite") ? 1.08 : 1;
+  followPath(ai, dt, (145 + (ai.speedBuff > 0 ? 42 : 0) + (ai.power > 0 ? 22 : 0)) * (mode === "Ranked" ? 1.08 : 0.96) * eliteBoost * intentBoost * hunterBoost * getMassSpeedFactor(ai));
 }
 
 function updatePowerTrails(dt) {
@@ -954,6 +967,16 @@ function updatePowerTrails(dt) {
 
 function chooseAITarget(ai) {
   const playerVisible = player.cloak <= 0;
+  ai.intent = "farm";
+
+  // Keep visible pressure on the real player even before they become a bounty target.
+  const pressureTarget = getPlayerPressureTarget(ai, playerVisible);
+  if (pressureTarget) return chooseHuntRoute(ai, pressureTarget);
+
+  // High scorers attract several independent hunters. Unarmed hunters detour for combat tools first.
+  const highScoreTarget = chooseHighScoreTarget(ai);
+  if (highScoreTarget) return chooseHuntRoute(ai, highScoreTarget);
+
   // AI uses a small behavior tree every 400ms: survive, contest, ambush, then farm.
   const nearbyGiant = nearestGiantThreat(ai);
   if (nearbyGiant && ai.power <= 0 && (ai.mass || 1) + 0.45 < (nearbyGiant.mass || 1)) return farthestCellFrom(nearbyGiant.x, nearbyGiant.y);
@@ -962,20 +985,25 @@ function chooseAITarget(ai) {
   if (player.power > 0 && ai.power <= 0 && playerVisible) return farthestCellFrom(player.x, player.y);
   if (pendingPowerSpawns.length && ai.power <= 0 && Math.random() < 0.9) {
     const target = pendingPowerSpawns[Math.floor(Math.random() * pendingPowerSpawns.length)];
+    ai.intent = "arm";
     return { x: target.wx + rand(-70, 70), y: target.wy + rand(-60, 60) };
   }
   if (ai.power > 0) {
     const rival = nearestHuntableCompetitor(ai, { includePlayer: playerVisible, includePowered: false, maxDistance: 1350, preferHighScore: true });
-    if (rival) return { x: rival.x, y: rival.y };
+    if (rival) return assignHuntTarget(ai, rival);
   }
-  if (shouldChasePlayer(ai, playerVisible)) return getAmbushPointNearPlayer(ai);
+  if (shouldChasePlayer(ai, playerVisible)) return assignHuntTarget(ai, player);
   const urgentPower = nearestAlive(ai, powerPellets);
   if (urgentPower && ai.power <= 0 && distance(ai.x, ai.y, urgentPower.x, urgentPower.y) < 1250 && Math.random() < 0.88) {
+    ai.intent = "arm";
     return { x: urgentPower.x, y: urgentPower.y };
   }
   if (ai.personality === "raider") {
     const ambush = nearestAmbushObjective(ai);
-    if (ambush) return ambush;
+    if (ambush) {
+      ai.intent = "arm";
+      return ambush;
+    }
   }
   if ((ai.score || 0) < 900) {
     return nearestAlive(ai, pellets) || nearestAlive(ai, coins) || randomCell();
@@ -992,7 +1020,7 @@ function chooseAITarget(ai) {
     if (player.power > 0 && playerVisible) return farthestCellFrom(player.x, player.y);
     if (ai.power > 0) {
       const rival = nearestHuntableCompetitor(ai, { includePlayer: playerVisible, includePowered: false, maxDistance: 1250, preferHighScore: true });
-      if (rival) return { x: rival.x, y: rival.y };
+      if (rival) return assignHuntTarget(ai, rival);
     }
     if (Math.random() < 0.32) {
       const rival = nearestHuntableCompetitor(ai, { includePlayer: playerVisible, lowerScoreBy: 500, maxDistance: 880, preferHighScore: true });
@@ -1001,18 +1029,24 @@ function chooseAITarget(ai) {
     if (Math.random() < 0.42) return farthestCellFrom(player.x - 900, player.y);
     return nearestAlive(ai, powerPellets) || randomCell((cell) => cell.x > 38);
   }
-  if (mode === "Ranked" && isPlayerBounty() && ai.personality !== "coward" && playerVisible) return { x: player.x, y: player.y };
+  if (mode === "Ranked" && isPlayerBounty() && ai.personality !== "coward" && playerVisible) return assignHuntTarget(ai, player);
 
   if ((ai.personality === "hunter" || ai.personality === "raider") && Math.random() < 0.58) {
     const rival = nearestHuntableCompetitor(ai, { includePlayer: playerVisible, lowerScoreBy: 140, maxDistance: 860, preferHighScore: true });
-    if (rival) return { x: rival.x, y: rival.y };
+    if (rival) return assignHuntTarget(ai, rival);
   }
-  if (ai.personality === "hunter" && playerVisible && player.score + 260 < ai.score) return { x: player.x, y: player.y };
+  if (ai.personality === "hunter" && playerVisible && player.power <= 0) return assignHuntTarget(ai, player);
   if (ai.personality === "raider") {
     const power = nearestAlive(ai, powerPellets);
-    if (power) return { x: power.x, y: power.y };
+    if (power) {
+      ai.intent = "arm";
+      return { x: power.x, y: power.y };
+    }
     const tool = nearestAlive(ai, tools);
-    if (tool) return { x: tool.x, y: tool.y };
+    if (tool) {
+      ai.intent = "arm";
+      return { x: tool.x, y: tool.y };
+    }
   }
   if (ai.personality === "coward") {
     if (currentRank <= 25) return nearestAlive(ai, powerPellets) || nearestAlive(ai, coins) || randomCell();
@@ -1021,12 +1055,128 @@ function chooseAITarget(ai) {
   return nearestAlive(ai, ai.personality === "farmer" && Math.random() < 0.36 ? coins : pellets) || randomCell();
 }
 
-function getAmbushPointNearPlayer(ai) {
-  if (ai.personality !== "hunter" || currentRank !== 1) return { x: player.x, y: player.y };
-  const angle = Math.atan2(player.y - ai.y, player.x - ai.x) + rand(-0.9, 0.9);
+function getPlayerPressureTarget(ai, playerVisible) {
+  if (!playerVisible || player.power > 0 || ai.elite || ai.respawn > 0) return null;
+  if (ai.personality !== "hunter" && ai.personality !== "raider") return null;
+  if (ai.focusTargetId === player.id && ai.huntLock > 0) return player;
+  const desiredPressure = mode === "Ranked" ? PLAYER_PRESSURE_HUNTERS + 1 : PLAYER_PRESSURE_HUNTERS;
+  if (countAssignedHunters(player.id, ai) >= desiredPressure) return null;
+  if (distance(ai.x, ai.y, player.x, player.y) > AI_HUNT_RANGE) return null;
+  return player;
+}
+
+function chooseHighScoreTarget(ai) {
+  const locked = findActiveCompetitor(ai.focusTargetId);
+  if (locked && ai.huntLock > 0 && isHighScoreTarget(locked, ai)) return locked;
+
+  let best = null;
+  let bestValue = -Infinity;
+  [player, ...aiPlayers].forEach((target) => {
+    if (!target || target === ai || target.respawn > 0 || target.cloak > 0) return;
+    if (!isHighScoreTarget(target, ai)) return;
+    if (target.power > 0 && ai.power <= 0 && !nearestCombatPickup(ai, target)) return;
+    const d = distance(ai.x, ai.y, target.x, target.y);
+    if (d > AI_HUNT_RANGE) return;
+    const pursuers = countAssignedHunters(target.id, ai);
+    if (pursuers >= MAX_HUNTERS_PER_TARGET) return;
+    const rank = getEntityRank(target);
+    const rankValue = rank <= 6 ? 1800 - rank * 110 : rank <= 50 ? 620 - rank * 7 : 0;
+    const scoreValue = Math.min(1250, Math.max(0, target.score || 0) / 65);
+    const playerValue = target.id === "you" ? 180 : 0;
+    const crowdPenalty = pursuers * 430;
+    const value = rankValue + scoreValue + playerValue - d * 0.24 - crowdPenalty;
+    if (value > bestValue) {
+      bestValue = value;
+      best = target;
+    }
+  });
+  return best;
+}
+
+function isHighScoreTarget(target, ai) {
+  if (!target || target.respawn > 0) return false;
+  const rank = getEntityRank(target);
+  const score = Math.max(0, target.score || 0);
+  if (rank <= 6) return true;
+  if (rank <= 50 && score >= HIGH_SCORE_HUNT_FLOOR) return true;
+  return score >= HIGH_SCORE_HUNT_FLOOR && score >= Math.max(1, ai.score || 0) * 1.35;
+}
+
+function countAssignedHunters(targetId, excludingAI = null) {
+  return aiPlayers.filter((other) =>
+    other !== excludingAI &&
+    other.respawn <= 0 &&
+    other.focusTargetId === targetId &&
+    (other.intent === "hunt" || other.intent === "arm")
+  ).length;
+}
+
+function findActiveCompetitor(id) {
+  if (!id) return null;
+  return [player, ...aiPlayers].find((target) => target && target.id === id && target.respawn <= 0) || null;
+}
+
+function chooseHuntRoute(ai, target) {
+  ai.focusTargetId = target.id;
+  ai.huntLock = Math.max(ai.huntLock || 0, rand(2.4, 4.2));
+
+  if (target.power > 0 && ai.power <= 0) {
+    const weapon = nearestCombatPickup(ai, target);
+    if (weapon) return assignWeaponTarget(ai, weapon, target);
+    ai.intent = "evade";
+    return farthestCellFrom(target.x, target.y);
+  }
+
+  if (!isCombatReady(ai) && (ai.personality !== "coward" || ai.huntBias < 0.34)) {
+    const weapon = nearestCombatPickup(ai, target);
+    if (weapon && (ai.personality === "raider" || ai.personality === "hunter" || distance(ai.x, ai.y, weapon.x, weapon.y) < 920)) {
+      return assignWeaponTarget(ai, weapon, target);
+    }
+  }
+  return assignHuntTarget(ai, target);
+}
+
+function isCombatReady(ai) {
+  return ai.power > 0 || !!ai.shield || ai.speedBuff > 0 || ai.attackDrive > 0;
+}
+
+function nearestCombatPickup(ai, target = null) {
+  let best = null;
+  let bestScore = Infinity;
+  const consider = (item, value) => {
+    if (!item.alive) return;
+    const d = distance(ai.x, ai.y, item.x, item.y);
+    if (d > AI_WEAPON_DETOUR_RANGE) return;
+    const routeCost = target ? distance(item.x, item.y, target.x, target.y) * 0.16 : 0;
+    const score = d + routeCost - value;
+    if (score < bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  };
+  powerPellets.forEach((item) => consider(item, 760));
+  tools.forEach((item) => {
+    const value = item.type === "shield" ? 620 : item.type === "freeze" ? 560 : item.type === "speed" ? 430 : 180;
+    consider(item, value);
+  });
+  return best;
+}
+
+function assignWeaponTarget(ai, weapon, target) {
+  ai.intent = "arm";
+  ai.focusTargetId = target?.id || ai.focusTargetId;
+  return { x: weapon.x, y: weapon.y };
+}
+
+function assignHuntTarget(ai, target) {
+  ai.intent = "hunt";
+  ai.focusTargetId = target.id;
+  ai.huntLock = Math.max(ai.huntLock || 0, rand(2.2, 3.8));
+  const d = distance(ai.x, ai.y, target.x, target.y);
+  const lead = clamp(d * 0.08, 35, 150);
   return {
-    x: player.x + Math.cos(angle) * 130,
-    y: player.y + Math.sin(angle) * 110
+    x: target.x + (target.lastDir?.x || 0) * lead,
+    y: target.y + (target.lastDir?.y || 0) * lead
   };
 }
 
@@ -1175,6 +1325,7 @@ function updatePickups(dt) {
     collectList(entity, powerPellets, pickupBonus + 10, (collector, item) => {
       collector.score += 50;
       collector.power = 8;
+      if (collector !== player) collector.attackDrive = 8;
       collector.combo = 0;
       addGrowth(collector, GROWTH_CONFIG.powerPelletGrowth, "+10 Growth");
       burst(item.x, item.y, "#fff08a", 16);
@@ -1365,6 +1516,9 @@ function applyTool(entity, type) {
     });
     iceBurst(entity.x, entity.y, 30);
   }
+  if (entity !== player && (type === "speed" || type === "shield" || type === "freeze")) {
+    entity.attackDrive = Math.max(entity.attackDrive || 0, type === "freeze" ? 4.5 : 6);
+  }
   if (entity === player) {
     playSfx("tool");
     toast(toolTypes.find((t) => t.type === type).label);
@@ -1503,6 +1657,10 @@ function defeat(defeated, victor) {
   defeated.magnet = 0;
   defeated.cloak = 0;
   defeated.speedBuff = 0;
+  defeated.attackDrive = 0;
+  defeated.intent = "farm";
+  defeated.focusTargetId = null;
+  defeated.huntLock = 0;
   defeated.path = [];
   defeated.respawn = 4.5;
   if (victor === player) playSfx("defeat");
@@ -1540,6 +1698,10 @@ function eliminateCompetitor(defeated, color = "#ff846b") {
   defeated.magnet = 0;
   defeated.cloak = 0;
   defeated.speedBuff = 0;
+  defeated.attackDrive = 0;
+  defeated.intent = "farm";
+  defeated.focusTargetId = null;
+  defeated.huntLock = 0;
   defeated.path = [];
   defeated.respawn = 4.5;
 }
@@ -2774,7 +2936,11 @@ function respawnCompetitor(ai) {
   ai.x = c.wx;
   ai.y = c.wy;
   ai.power = 0;
+  ai.attackDrive = 0;
   ai.combo = 0;
+  ai.intent = "farm";
+  ai.focusTargetId = null;
+  ai.huntLock = 0;
   ai.path = [];
 }
 
