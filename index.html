@@ -6,6 +6,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>吃豆人大作战</title>
+    <link rel="preload" as="image" href="assets/home/title.webp" type="image/webp" fetchpriority="high" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -19,26 +20,26 @@
 
       <section id="mainMenu" class="screen active">
         <button id="settingsBtn" class="settings-fab" aria-label="设置">
-          <img src="assets/home/settings.png" alt="" draggable="false" />
+          <img src="assets/home/settings.webp" alt="" decoding="async" draggable="false" />
         </button>
 
         <div class="home-shell">
           <div class="title-area">
-            <img class="home-asset home-title-img" src="assets/home/title.png" alt="吃豆人大作战" draggable="false" />
-            <img class="home-asset home-subtitle-img" src="assets/home/subtitle.png" alt="Bean Battle" draggable="false" />
+            <img class="home-asset home-title-img" src="assets/home/title.webp" alt="吃豆人大作战" decoding="async" fetchpriority="high" draggable="false" />
+            <img class="home-asset home-subtitle-img" src="assets/home/subtitle.webp" alt="Bean Battle" decoding="async" draggable="false" />
           </div>
 
           <div class="character-area" data-skin="royal-v1">
-            <img class="home-asset home-character-img" src="assets/home/character.png" alt="皇家黑豆王" draggable="false" />
+            <img class="home-asset home-character-img" src="assets/home/character.webp" alt="皇家黑豆王" decoding="async" fetchpriority="high" draggable="false" />
           </div>
 
           <div class="mode-buttons">
             <button id="practiceBtn" class="mode-image-button" aria-label="无尽模式">
-              <img src="assets/home/endless.png" alt="" draggable="false" />
+              <img src="assets/home/endless.webp" alt="" decoding="async" draggable="false" />
             </button>
 
             <button id="rankedBtn" class="mode-image-button" aria-label="排位模式">
-              <img src="assets/home/ranked.png" alt="" draggable="false" />
+              <img src="assets/home/ranked.webp" alt="" decoding="async" draggable="false" />
             </button>
           </div>
 

@@ -28,9 +28,9 @@ jobs:
 
       - name: Prepare static game
         run: |
-          mkdir -p _site
+          mkdir -p _site/assets/home
           cp index.html style.css game.js _site/
-          cp -R assets _site/assets
+          cp assets/home/*.webp _site/assets/home/
           touch _site/.nojekyll
 
       - name: Configure GitHub Pages

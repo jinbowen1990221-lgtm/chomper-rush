@@ -49,29 +49,6 @@ const RANK_POINT_TIERS = [
   { min: 2300, max: Infinity, name: "王者灯塔", stars: 2 }
 ];
 
-const assets = {
-  mapWithCharacters: "assets/map-with-characters.png",
-  mapEmpty: "assets/map-empty.png",
-  skins: {
-    royal: "assets/skin-royal.png",
-    pirate: "assets/skin-pirate.png",
-    neon: "assets/skin-neon.png",
-    cowboy: "assets/skin-cowboy.png"
-  },
-  enemies: {
-    crab: "assets/enemy-crab.png",
-    fishman: "assets/enemy-fishman.png",
-    octopus: "assets/enemy-octopus.png",
-    captain: "assets/enemy-captain.png",
-    blueMonster: "assets/enemy-blue-monster.png"
-  },
-  props: {
-    barrel: "assets/prop-barrel.png",
-    lamp: "assets/prop-lamp.png",
-    pipe: "assets/prop-pipe.png"
-  }
-};
-
 const skinCatalog = {
   royal: { name: "Royal Chomper", cnName: "皇家咔咔兽", rarity: "Legendary", owned: true, equipped: true, price: 0 },
   pirate: { name: "Pirate Chomper", cnName: "海盗咔咔兽", rarity: "Rare", owned: false, price: 1200 },
@@ -219,7 +196,6 @@ let joystickState = { active: false, id: null, x: 0, y: 0, dx: 0, dy: 0 };
 let keyVector = { x: 0, y: 0 };
 let audioEngine;
 
-loadAssets();
 resize();
 renderShop();
 syncMeta();
@@ -282,22 +258,6 @@ function syncMeta() {
   ui.rankStars.textContent = `${rank.name} ${"★".repeat(rank.stars)}`;
   syncSettingsUI();
   applyControlLayout();
-}
-
-function loadAssets() {
-  const flat = [
-    ["mapEmpty", assets.mapEmpty],
-    ["mapWithCharacters", assets.mapWithCharacters],
-    ...Object.entries(assets.skins).map(([k, v]) => [`skin:${k}`, v]),
-    ...Object.entries(assets.enemies).map(([k, v]) => [`enemy:${k}`, v]),
-    ...Object.entries(assets.props).map(([k, v]) => [`prop:${k}`, v])
-  ];
-  flat.forEach(([key, src]) => {
-    const img = new Image();
-    img.onload = () => (images[key] = img);
-    img.onerror = () => (images[key] = null);
-    img.src = src;
-  });
 }
 
 function buildGrid() {
